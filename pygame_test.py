@@ -1,76 +1,97 @@
 import pygame
 import sys
 
+from pygame.locals import *
 from random import randint, uniform
 
-pygame.init()
+if not pygame.font: print 'Warning: fonts disabled'
 
 SIZE = WIDTH, HEIGHT = 640, 400
 BG_COLOR = (240, 245, 250)
 NUM_BALLS = 10
 
-TIMEREVENT = pygame.USEREVENT
-
-FPS = 60
-
 MAX_SPEED = 5
 
-class Ball:
-  def __init__(self, image, x, y, speed):
-    self._speed = speed
-    self.image = image
-    self.pos = image.get_rect().move(x, y)
 
-  def move(self):
-    self.pos = self.pos.move(self._speed)
-    if self.pos.left < 0 or self.pos.right > WIDTH:
+class Ball(pygame.sprite.Sprite):
+  def __init__(self, image, x, y, speed):
+    pygame.sprite.Sprite.__init__(self)
+    self._speed = speed
+    self.image = pygame.image.load(image)
+    self.rect = self.image.get_rect().move(x, y)
+
+  def update(self):
+    self.rect = self.rect.move(self._speed)
+    if self.rect.left < 0 or self.rect.right > WIDTH:
       self._speed[0] = self._speed[0] * -0.9
-    if self.pos.top < 0 or self.pos.bottom > HEIGHT:
+    if self.rect.top < 0 or self.rect.bottom > HEIGHT:
       self._speed[1] = self._speed[1] * -0.99
 
     self._speed[1] += 0.1
 
+  def maybe_pop(self, pos):
+    return self.rect.collidepoint(pos)
+
+def create_balls(num_balls):
+  balls = []
+  for b in range(num_balls):
+    balls.append(
+        Ball('ball.gif',
+             randint(0, WIDTH),
+             randint(0, HEIGHT / 2),
+             [uniform(-MAX_SPEED, MAX_SPEED), 0]))
+  return balls
+
+
 def main():
   pygame.init()
-  pygame.time.set_timer(TIMEREVENT, 1000 / FPS)
 
   screen = pygame.display.set_mode(SIZE)
+  pygame.display.set_caption('BALLS')
 
-  image = pygame.image.load("ball.gif")
+  # Create the background and show it as soon as possible.
+  background = pygame.Surface(screen.get_size())
+  background = background.convert()
+  background.fill(BG_COLOR)
 
-  balls = []
-  for b in range(NUM_BALLS):
-    balls.append(
-        Ball(image,
-             randint(0, WIDTH),
-             randint(0, HEIGHT - image.get_rect().height),
-             [uniform(-MAX_SPEED, MAX_SPEED), 0]))
+  if pygame.font:
+    font = pygame.font.Font(None, 36)
+    text = font.render('Pop the balloons!', 1, (10, 10, 10))
+    textpos = text.get_rect(centerx = background.get_width() / 2)
+    background.blit(text, textpos)
+
+  screen.blit(background, (0, 0))
+  pygame.display.flip()
+
+  # Finish set up
+  balls = create_balls(NUM_BALLS)
+  ballsprites = pygame.sprite.RenderPlain(tuple(balls))
+
+  clock = pygame.time.Clock()
 
   while True:
-    ev = pygame.event.wait()
+    clock.tick(60)
 
-    if ev.type == TIMEREVENT:
-      if len(balls) == 0:
-        break
+    for ev in pygame.event.get():
+      if ev.type == QUIT or (ev.type == KEYDOWN and ev.key == K_ESCAPE):
+        return
+      elif ev.type == MOUSEBUTTONDOWN:
+        for b in balls:
+          if b.maybe_pop(ev.pos):
+            print('*** POP ***')
+            balls.remove(b)
+            ballsprites.remove(b)
+            break
+        if len(balls) == 0:
+          return
 
-      for b in balls:
-        b.move()
+    for b in balls:
+      b.update()
 
-      screen.fill(BG_COLOR)
-
-      for b in balls:
-        screen.blit(b.image, b.pos)
-
-      pygame.display.flip()
-    elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:  # CONSTANT
-      for b in balls:
-        if ev.pos[0] > b.pos.left and ev.pos[0] < b.pos.right and \
-           ev.pos[1] < b.pos.bottom and ev.pos[1] > b.pos.top:
-          print "*** POP ***"
-          balls.remove(b)
-          break
-    elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
-      break
+    # draw
+    screen.blit(background, (0, 0))
+    ballsprites.draw(screen)
+    pygame.display.flip()
 
 if __name__ == "__main__":
   main()
